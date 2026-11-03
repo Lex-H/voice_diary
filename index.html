@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>SoulSpace - AI 心理療癒日記與陪伴助手</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        morandi: {
+                            50: '#fdf8f8',
+                            100: '#f9f1f2',
+                            200: '#f3e2e5',
+                            300: '#e7c9ce',
+                            400: '#d7a8b0',
+                            500: '#c38793',
+                            600: '#a86774',
+                            700: '#8c505c',
+                            800: '#75444e',
+                            900: '#633c44',
+                        },
+                        genshin: {
+                            gold: '#e6c888',
+                            goldLight: '#f6e7c1',
+                            accent: '#e29ca7',
+                            bgLight: '#faf6f6'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts - Japanese/Anime Feel -->
+    <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* 使用 dvh (Dynamic Viewport Height) 防 iOS Safari 網址列遮擋 */
+        html, body {
+            height: 100%;
+            height: 100dvh;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Zen Maru Gothic', 'Noto Sans TC', system-ui, -apple-system, sans-serif;
+            background: radial-gradient(circle at 10% 20%, #fbf5f6 0%, #f3e6e8 40%, #e8d5d9 100%);
+            background-attachment: fixed;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* 原神風格 UI 卡片與邊框 */
+        .genshin-card {
+            background: rgba(255, 255, 255, 0.78);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(231, 201, 206, 0.6);
+            box-shadow: 0 10px 30px -10px rgba(168, 103, 116, 0.12),
+                        inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+        }
+
+        /* 莫蘭迪粉動漫風氣泡 */
+        .chat-bubble-ai {
+            background: linear-gradient(145deg, #ffffff 0%, #fdf8f9 100%);
+            border: 1.5px solid #f0d8dc;
+            box-shadow: 0 8px 20px -6px rgba(195, 135, 147, 0.15),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+            border-radius: 1.5rem 1.5rem 1.5rem 0.3rem;
+            color: #5c4146;
+        }
+        .chat-bubble-user {
+            background: linear-gradient(135deg, #d7a8b0 0%, #c38793 100%);
+            border: 1px solid #b87683;
+            box-shadow: 0 8px 20px -4px rgba(168, 103, 116, 0.3);
+            border-radius: 1.5rem 1.5rem 0.3rem 1.5rem;
+            color: #ffffff;
+            text-shadow: 0 1px 2px rgba(117, 68, 78, 0.2);
+        }
+
+        /* 原神風格元素結晶按鈕 */
+        .genshin-btn-primary {
+            background: linear-gradient(135deg, #d7a8b0 0%, #a86774 100%);
+            border: 1px solid #f6e7c1;
+            box-shadow: 0 4px 15px rgba(168, 103, 116, 0.35);
+            transition: all 0.2s ease;
+        }
+        .genshin-btn-primary:active {
+            transform: scale(0.96);
+        }
+
+        .role-btn-active {
+            background: linear-gradient(135deg, #ffffff 0%, #f9f1f2 100%);
+            color: #a86774;
+            border: 1.5px solid #e7c9ce;
+            box-shadow: 0 4px 12px rgba(168, 103, 116, 0.15);
+        }
+
+        /* Custom scrollbar & Touch Optimization */
+        .smooth-scroll {
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-y: contain;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(195, 135, 147, 0.3);
+            border-radius: 10px;
+        }
+
+        .pulse-recording {
+            animation: pulse-pink 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse-pink {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: .6; transform: scale(1.15); }
+        }
+
+        /* 安全區域 padding（適配 iPhone 瀏海與底部 Home Bar） */
+        .safe-pb {
+            padding-bottom: env(safe-area-inset-bottom, 12px);
+        }
+        .safe-pt {
+            padding-top: env(safe-area-inset-top, 12px);
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col md:flex-row overflow-hidden text-morandi-900 select-none">
+
+    <!-- 行動端 Header 頂部列（僅手機顯示） -->
+    <header class="md:hidden genshin-card border-b border-morandi-200/60 safe-pt px-4 py-3 flex items-center justify-between z-20 shrink-0">
+        <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-morandi-500 to-morandi-300 flex items-center justify-center text-white shadow-sm border border-genshin-goldLight">
+                <i class="fa-solid fa-sparkles text-xs"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-morandi-800 text-sm leading-tight">SoulSpace</h1>
+                <p class="text-[9px] text-morandi-500">✦ AI 心靈祈願所 ✦</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="mobileDrawerOpenBtn" class="px-3 py-1.5 rounded-xl bg-morandi-100/80 text-morandi-700 text-xs font-bold border border-morandi-200 flex items-center gap-1.5 active:scale-95 transition">
+                <i class="fa-solid fa-sliders text-morandi-500"></i>
+                <span>狀態/設定</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 側邊欄 Sidebar (大螢幕固定，手機版以抽屜 Drawer 滑出) -->
+    <aside id="sidebarDrawer" class="fixed md:static inset-0 bg-morandi-900/30 md:bg-transparent backdrop-blur-sm md:backdrop-blur-none z-40 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out w-full md:w-80 h-full flex justify-start">
+        <div class="w-4/5 md:w-full h-full genshin-card border-r border-morandi-200/80 flex flex-col justify-between overflow-y-auto safe-pt safe-pb bg-white/95 md:bg-white/70">
+            <div>
+                <!-- App Logo Header (Desktop) -->
+                <div class="p-5 border-b border-morandi-200/60 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-morandi-500 to-morandi-300 flex items-center justify-center text-white shadow-md shadow-morandi-300/50 border border-genshin-goldLight">
+                            <i class="fa-solid fa-sparkles text-base"></i>
+                        </div>
+                        <div>
+                            <h1 class="font-bold text-morandi-800 text-lg leading-tight tracking-wide">SoulSpace</h1>
+                            <p class="text-[11px] text-morandi-500 font-medium">✦ AI 心靈祈願所 ✦</p>
+                        </div>
+                    </div>
+                    <button id="configBtn" class="w-9 h-9 rounded-full bg-white/80 hover:bg-morandi-100 text-morandi-600 transition border border-morandi-200 flex items-center justify-center active:scale-95" title="設定 API Key">
+                        <i class="fa-solid fa-gear text-sm"></i>
+                    </button>
+                </div>
+
+                <!-- 角色選擇切換區 -->
+                <div class="p-4">
+                    <label class="text-[11px] font-bold text-morandi-500 tracking-wider block mb-2.5">❖ 選擇陪伴神護陪伴者</label>
+                    <div class="grid grid-cols-2 gap-2 p-1.5 bg-morandi-100/70 rounded-2xl border border-morandi-200/50">
+                        <button id="roleSister" class="role-btn role-btn-active py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 touch-manipulation">
+                            <i class="fa-solid fa-heart text-morandi-500"></i>
+                            <span>暖心姊妹</span>
+                        </button>
+                        <button id="roleMentor" class="role-btn py-2.5 px-3 rounded-xl text-xs font-medium transition flex items-center justify-center gap-2 text-morandi-600 hover:text-morandi-800 touch-manipulation">
+                            <i class="fa-solid fa-compass"></i>
+                            <span>人生導師</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 今日情緒快照 -->
+                <div class="px-4 py-2">
+                    <div class="bg-gradient-to-br from-white/90 to-morandi-100/60 p-4 rounded-2xl border border-morandi-200/80 shadow-sm relative overflow-hidden">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold text-morandi-800 flex items-center gap-1.5">
+                                <i class="fa-solid fa-gem text-genshin-gold text-[10px]"></i>
+                                情緒元素凝結晶
+                            </span>
+                            <span id="emotionBadge" class="text-[11px] px-2.5 py-0.5 rounded-full bg-morandi-200/80 text-morandi-800 font-bold border border-morandi-300/50">平穩放鬆</span>
+                        </div>
+                        <p id="emotionSummary" class="text-xs text-morandi-700 leading-relaxed mb-3">向星空傾訴你的心聲，命之座將為你記錄今日的心境軌跡。</p>
+                        <!-- 統計標籤 -->
+                        <div id="tagContainer" class="flex flex-wrap gap-1.5">
+                            <span class="text-[10px] bg-white/80 px-2.5 py-1 rounded-lg border border-morandi-200 text-morandi-700 font-medium">🌸 寧靜 +1</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 隱私與安全提示底部 -->
+            <div class="p-4 border-t border-morandi-200/60">
+                <div class="flex items-start gap-2.5 p-3 rounded-2xl bg-white/80 border border-morandi-200 text-morandi-800 text-xs shadow-sm">
+                    <i class="fa-solid fa-shield-cat text-morandi-500 text-sm mt-0.5 shrink-0"></i>
+                    <div class="leading-relaxed">
+                        <span class="font-bold block text-morandi-900 mb-0.5">隱私保護與防護</span>
+                        心事僅存於此裝置。若需即時支援，請撥打安心專線 <a href="tel:1925" class="underline font-bold text-morandi-600">1925</a>。
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- 點擊背景關閉手機側欄 -->
+        <div id="drawerOverlay" class="flex-1 md:hidden"></div>
+    </aside>
+
+    <!-- 主內容區 Main Container -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden bg-transparent">
+
+        <!-- 桌機頂部/手機資訊 Header -->
+        <header class="py-3 px-4 md:px-6 genshin-card border-b border-morandi-200/60 flex items-center justify-between shrink-0 z-10">
+            <div class="flex items-center gap-3">
+                <div id="avatarBox" class="w-9 h-9 md:w-10 md:h-10 rounded-2xl bg-gradient-to-br from-morandi-300 to-morandi-500 text-white flex items-center justify-center font-bold text-sm md:text-base shadow-md border border-genshin-goldLight shrink-0">
+                    <i class="fa-solid fa-heart"></i>
+                </div>
+                <div>
+                    <h2 id="personaName" class="font-bold text-morandi-900 text-xs md:text-sm flex items-center gap-1.5">
+                        暖心好姊妹
+                        <span class="text-[9px] md:text-[10px] bg-morandi-200 text-morandi-800 px-2 py-0.5 rounded-full border border-morandi-300">陪伴夥伴</span>
+                    </h2>
+                    <p id="personaDesc" class="text-[10px] md:text-[11px] text-morandi-600 line-clamp-1">溫柔傾聽你的喜怒哀樂，給予如櫻花般的暖心陪伴</p>
+                </div>
+            </div>
+            <button id="clearChatBtn" class="text-xs text-morandi-600 hover:text-morandi-900 transition flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/80 border border-morandi-200 shadow-sm shrink-0 active:scale-95">
+                <i class="fa-solid fa-rotate-left text-[11px]"></i>
+                <span class="hidden sm:inline">重置對話</span>
+            </button>
+        </header>
+
+        <!-- 聊天訊息歷史記錄區 -->
+        <div id="chatHistory" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 smooth-scroll">
+            <!-- 歡迎預設訊息 -->
+            <div class="flex gap-2.5 max-w-2xl">
+                <div class="w-8 h-8 md:w-9 md:h-9 rounded-2xl bg-gradient-to-br from-morandi-300 to-morandi-500 text-white flex items-center justify-center shrink-0 text-xs md:text-sm font-bold mt-1 shadow-sm border border-white">
+                    <i class="fa-solid fa-heart"></i>
+                </div>
+                <div class="chat-bubble-ai p-3.5 md:p-4 text-xs md:text-sm leading-relaxed">
+                    旅人，今天過得還好嗎？不論是旅行中的微小煩惱，還是積壓在心底的情緒，都可以放心告訴我喔。我會一直在這裡陪伴著你 🌸✨
+                </div>
+            </div>
+        </div>
+
+        <!-- 訊息輸入與錄音功能區 Footer (Mobile Safe Area 適配) -->
+        <footer class="p-2.5 md:p-4 genshin-card border-t border-morandi-200/60 shrink-0 z-10 safe-pb">
+            <form id="chatForm" class="max-w-4xl mx-auto flex items-end gap-2">
+                <!-- 語音轉文字按鈕 -->
+                <button type="button" id="voiceBtn" class="p-3 md:p-3.5 rounded-2xl border border-morandi-200 hover:border-morandi-400 text-morandi-600 hover:text-morandi-800 transition flex items-center justify-center bg-white/90 shrink-0 shadow-sm active:scale-95 min-w-[44px] min-h-[44px]" title="語音祈願輸入">
+                    <i class="fa-solid fa-microphone text-base"></i>
+                </button>
+
+                <!-- 文字輸入框 -->
+                <div class="flex-1 relative">
+                    <textarea id="userInput" rows="1" class="w-full p-3 md:p-3.5 rounded-2xl border border-morandi-200/90 focus:outline-none focus:border-morandi-400 focus:ring-2 focus:ring-morandi-200 text-xs md:text-sm resize-none pr-3 max-h-28 transition bg-white/90 text-morandi-900 placeholder-morandi-400 shadow-inner" placeholder="傾訴心聲，或按下麥克風用說的..."></textarea>
+                </div>
+
+                <!-- 送出按鈕 -->
+                <button type="submit" id="sendBtn" class="p-3 md:p-3.5 rounded-2xl genshin-btn-primary text-white transition flex items-center justify-center shrink-0 min-w-[44px] min-h-[44px]">
+                    <i class="fa-solid fa-paper-plane text-sm"></i>
+                </button>
+            </form>
+            <div id="recordingStatus" class="hidden text-center text-xs text-morandi-700 font-bold mt-2 flex items-center justify-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-morandi-500 pulse-recording"></span>
+                <span>正在聆聽旅人的心聲... (再次點擊麥克風結束)</span>
+            </div>
+        </footer>
+    </main>
+
+    <!-- API Key 設定 Modal -->
+    <div id="configModal" class="fixed inset-0 bg-morandi-900/30 backdrop-blur-md hidden items-center justify-center p-4 z-50 safe-pb safe-pt">
+        <div class="genshin-card rounded-3xl max-w-md w-full p-5 md:p-6 shadow-2xl border border-morandi-200/80 bg-white/95">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="font-bold text-morandi-900 text-sm md:text-base flex items-center gap-2">
+                    <i class="fa-solid fa-key text-genshin-gold"></i>
+                    連結命之座 API Key
+                </h3>
+                <button id="closeModalBtn" class="text-morandi-400 hover:text-morandi-700 w-8 h-8 rounded-full flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+            </div>
+            <p class="text-xs text-morandi-600 mb-4 leading-relaxed">
+                輸入您的 **Google Gemini API Key** 以啟動真實靈魂回應；未填寫時系統將維持在動漫模擬模式體驗。
+            </p>
+            <div class="mb-5">
+                <label class="block text-xs font-bold text-morandi-800 mb-1.5">Gemini API Key</label>
+                <input type="password" id="apiKeyInput" class="w-full p-3 border border-morandi-200 rounded-2xl text-xs md:text-sm focus:outline-none focus:border-morandi-400 bg-white/80" placeholder="AIzaSy...">
+            </div>
+            <div class="flex justify-end gap-2">
+                <button id="saveApiKeyBtn" class="px-5 py-2.5 genshin-btn-primary text-white rounded-2xl text-xs font-bold transition">
+                    確定儲存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript 核心邏輯 -->
+    <script>
+        // --- 狀態管理 ---
+        let currentRole = 'sister'; 
+        let apiKey = localStorage.getItem('soulspace_gemini_key') || '';
+        let isRecording = false;
+        let recognition = null;
+
+        // --- DOM 元件 ---
+        const roleSisterBtn = document.getElementById('roleSister');
+        const roleMentorBtn = document.getElementById('roleMentor');
+        const personaName = document.getElementById('personaName');
+        const personaDesc = document.getElementById('personaDesc');
+        const avatarBox = document.getElementById('avatarBox');
+        const chatHistory = document.getElementById('chatHistory');
+        const chatForm = document.getElementById('chatForm');
+        const userInput = document.getElementById('userInput');
+        const voiceBtn = document.getElementById('voiceBtn');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const clearChatBtn = document.getElementById('clearChatBtn');
+        const configBtn = document.getElementById('configBtn');
+        const configModal = document.getElementById('configModal');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const emotionBadge = document.getElementById('emotionBadge');
+        const emotionSummary = document.getElementById('emotionSummary');
+        const tagContainer = document.getElementById('tagContainer');
+        const sidebarDrawer = document.getElementById('sidebarDrawer');
+        const mobileDrawerOpenBtn = document.getElementById('mobileDrawerOpenBtn');
+        const drawerOverlay = document.getElementById('drawerOverlay');
+
+        if (apiKey) apiKeyInput.value = apiKey;
+
+        // --- 手機抽屜開關邏輯 ---
+        function openDrawer() {
+            sidebarDrawer.classList.remove('-translate-x-full');
+        }
+        function closeDrawer() {
+            sidebarDrawer.classList.add('-translate-x-full');
+        }
+        mobileDrawerOpenBtn.addEventListener('click', openDrawer);
+        drawerOverlay.addEventListener('click', closeDrawer);
+
+        // Textarea 自動長高
+        userInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        // 角色切換
+        roleSisterBtn.addEventListener('click', () => { switchRole('sister'); closeDrawer(); });
+        roleMentorBtn.addEventListener('click', () => { switchRole('mentor'); closeDrawer(); });
+
+        function switchRole(role) {
+            currentRole = role;
+            if (role === 'sister') {
+                roleSisterBtn.className = "role-btn role-btn-active py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 touch-manipulation";
+                roleMentorBtn.className = "role-btn py-2.5 px-3 rounded-xl text-xs font-medium transition flex items-center justify-center gap-2 text-morandi-600 hover:text-morandi-800 touch-manipulation";
+                personaName.innerHTML = `暖心好姊妹 <span class="text-[9px] md:text-[10px] bg-morandi-200 text-morandi-800 px-2 py-0.5 rounded-full border border-morandi-300">陪伴夥伴</span>`;
+                personaDesc.innerText = "溫柔傾聽你的喜怒哀樂，給予如櫻花般的暖心陪伴";
+                avatarBox.className = "w-9 h-9 md:w-10 md:h-10 rounded-2xl bg-gradient-to-br from-morandi-300 to-morandi-500 text-white flex items-center justify-center font-bold text-sm md:text-base shadow-md border border-genshin-goldLight shrink-0";
+                avatarBox.innerHTML = `<i class="fa-solid fa-heart"></i>`;
+            } else {
+                roleMentorBtn.className = "role-btn role-btn-active py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 touch-manipulation";
+                roleSisterBtn.className = "role-btn py-2.5 px-3 rounded-xl text-xs font-medium transition flex items-center justify-center gap-2 text-morandi-600 hover:text-morandi-800 touch-manipulation";
+                personaName.innerHTML = `人生導師 <span class="text-[9px] md:text-[10px] bg-morandi-200 text-morandi-800 px-2 py-0.5 rounded-full border border-morandi-300">智慧指引</span>`;
+                personaDesc.innerText = "理性陪伴你梳理心境，提供如微風般的指引與方向";
+                avatarBox.className = "w-9 h-9 md:w-10 md:h-10 rounded-2xl bg-gradient-to-br from-morandi-500 to-morandi-700 text-white flex items-center justify-center font-bold text-sm md:text-base shadow-md border border-genshin-goldLight shrink-0";
+                avatarBox.innerHTML = `<i class="fa-solid fa-compass"></i>`;
+            }
+        }
+
+        // --- 語音轉文字 (iOS Safari / Android 相容處理) ---
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.lang = 'zh-TW';
+
+            recognition.onresult = (event) => {
+                let transcript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    transcript += event.results[i][0].transcript;
+                }
+                userInput.value = transcript;
+                userInput.dispatchEvent(new Event('input'));
+            };
+
+            recognition.onend = () => {
+                isRecording = false;
+                recordingStatus.classList.add('hidden');
+                voiceBtn.classList.remove('bg-morandi-200', 'text-morandi-800', 'border-morandi-400');
+            };
+
+            voiceBtn.addEventListener('click', () => {
+                if (isRecording) {
+                    recognition.stop();
+                } else {
+                    try {
+                        recognition.start();
+                        isRecording = true;
+                        recordingStatus.classList.remove('hidden');
+                        voiceBtn.classList.add('bg-morandi-200', 'text-morandi-800', 'border-morandi-400');
+                    } catch (e) {
+                        console.error(e);
+                    }
+                }
+            });
+        } else {
+            voiceBtn.title = "您的瀏覽器不支援語音辨識";
+            voiceBtn.classList.add('opacity-40');
+        }
+
+        // --- 訊息處理 ---
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            appendMessage('user', message);
+            userInput.value = '';
+            userInput.style.height = 'auto';
+
+            const loadingId = appendLoadingBubble();
+
+            // 如果有 API Key，呼叫真實 Gemini API
+            if (apiKey) {
+                try {
+                    const aiReply = await callGeminiAPI(message);
+                    removeLoadingBubble(loadingId);
+                    appendMessage('ai', aiReply);
+                    updateEmotionAnalysis();
+                } catch (error) {
+                    console.error('API Error:', error);
+                    removeLoadingBubble(loadingId);
+                    appendMessage('ai', `⚠️ 連線至命之座失敗：${error.message || '請檢查 API Key 是否正確'}`);
+                }
+            } else {
+                // 無 API Key 時走模擬展示模式
+                setTimeout(() => {
+                    removeLoadingBubble(loadingId);
+                    const mockReply = currentRole === 'sister' 
+                        ? '（目前為展示模式，請點擊右上角⚙️填入 API Key 即可開啟真實 AI 回覆喔！）收到你的心聲囉，抱抱你～🌸✨' 
+                        : '（目前為展示模式，請點擊右上角⚙️填入 API Key 即可開啟真實 AI 回覆喔！）試著將問題拆解成一小步，慢慢來。';
+                    appendMessage('ai', mockReply);
+                    updateEmotionAnalysis();
+                }, 1000);
+            }
+        });
+
+        // --- 串接 Google Gemini API 核心邏輯 ---
+        async function callGeminiAPI(userPrompt) {
+            // 系統 prompt 定義
+            const systemPrompts = {
+                sister: "你是一位充滿同理心、溫柔體貼的「暖心好姊妹」。你的語氣親切、溫暖、善於傾聽與安慰，適當加入柔和的表情符號 (🌸✨)。請盡量提供情緒價值與陪伴感，回應長度適中（約100-200字）。",
+                mentor: "你是一位具備智慧、理性且富有同理心的「人生導師」。你的語氣平穩、客觀，善於協助使用者梳理思緒，將複雜的問題拆解成簡單的可執行步驟。請給予明確且溫和的指引與思維啟發，回應長度適中（約100-200字）。"
+            };
+
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+            const requestBody = {
+                system_instruction: {
+                    parts: [{ text: systemPrompts[currentRole] }]
+                },
+                contents: [
+                    {
+                        role: "user",
+                        parts: [{ text: userPrompt }]
+                    }
+                ],
+                generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 800
+                }
+            };
+
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error?.message || `HTTP 錯誤碼: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.candidates && data.candidates[0]?.content?.parts[0]?.text) {
+                return data.candidates[0].content.parts[0].text;
+            } else {
+                throw new Error('API 未傳回有效的回應文字');
+            }
+        }
+
+        function appendMessage(sender, text) {
+            const wrapper = document.createElement('div');
+            wrapper.className = `flex gap-2.5 max-w-2xl ${sender === 'user' ? 'ml-auto justify-end' : ''}`;
+
+            if (sender === 'ai') {
+                const isSister = currentRole === 'sister';
+                wrapper.innerHTML = `
+                    <div class="w-8 h-8 md:w-9 md:h-9 rounded-2xl ${isSister ? 'bg-gradient-to-br from-morandi-300 to-morandi-500' : 'bg-gradient-to-br from-morandi-500 to-morandi-700'} text-white flex items-center justify-center shrink-0 text-xs md:text-sm font-bold mt-1 shadow-sm border border-white">
+                        <i class="fa-solid ${isSister ? 'fa-heart' : 'fa-compass'}"></i>
+                    </div>
+                    <div class="chat-bubble-ai p-3.5 md:p-4 text-xs md:text-sm leading-relaxed">
+                        ${escapeHtml(text).replace(/\n/g, '<br>')}
+                    </div>
+                `;
+            } else {
+                wrapper.innerHTML = `
+                    <div class="chat-bubble-user p-3.5 md:p-4 text-xs md:text-sm leading-relaxed">
+                        ${escapeHtml(text).replace(/\n/g, '<br>')}
+                    </div>
+                `;
+            }
+
+            chatHistory.appendChild(wrapper);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        function appendLoadingBubble() {
+            const id = 'loading-' + Date.now();
+            const wrapper = document.createElement('div');
+            wrapper.id = id;
+            wrapper.className = 'flex gap-2.5 max-w-2xl';
+            const isSister = currentRole === 'sister';
+            wrapper.innerHTML = `
+                <div class="w-8 h-8 md:w-9 md:h-9 rounded-2xl ${isSister ? 'bg-gradient-to-br from-morandi-300 to-morandi-500' : 'bg-gradient-to-br from-morandi-500 to-morandi-700'} text-white flex items-center justify-center shrink-0 text-xs md:text-sm font-bold mt-1 shadow-sm border border-white">
+                    <i class="fa-solid ${isSister ? 'fa-heart' : 'fa-compass'}"></i>
+                </div>
+                <div class="chat-bubble-ai p-3.5 md:p-4 text-xs md:text-sm text-morandi-500 flex items-center gap-2">
+                    <i class="fa-solid fa-sparkles fa-spin text-genshin-gold"></i>
+                    <span>正在凝聚風元素傾聽中...</span>
+                </div>
+            `;
+            chatHistory.appendChild(wrapper);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+            return id;
+        }
+
+        function removeLoadingBubble(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+
+        function updateEmotionAnalysis() {
+            const tags = ['疲累 🌸', '焦慮 🍃', '期望 ✨', '平和 🕊️'];
+            const randomTag = tags[Math.floor(Math.random() * tags.length)];
+            const newSpan = document.createElement('span');
+            newSpan.className = "text-[10px] bg-white/80 px-2.5 py-1 rounded-lg border border-morandi-200 text-morandi-700 font-medium";
+            newSpan.innerText = randomTag;
+            tagContainer.appendChild(newSpan);
+        }
+
+        clearChatBtn.addEventListener('click', () => {
+            chatHistory.innerHTML = `
+                <div class="flex gap-2.5 max-w-2xl">
+                    <div class="w-8 h-8 md:w-9 md:h-9 rounded-2xl bg-gradient-to-br from-morandi-300 to-morandi-500 text-white flex items-center justify-center shrink-0 text-xs md:text-sm font-bold mt-1 shadow-sm border border-white">
+                        <i class="fa-solid fa-heart"></i>
+                    </div>
+                    <div class="chat-bubble-ai p-3.5 md:p-4 text-xs md:text-sm leading-relaxed">
+                        命之座軌跡已重置。旅人，不論什麼時候，我都準備好再次聆聽你了 🌸
+                    </div>
+                </div>
+            `;
+        });
+
+        configBtn.addEventListener('click', () => { configModal.classList.remove('hidden'); configModal.classList.add('flex'); closeDrawer(); });
+        closeModalBtn.addEventListener('click', () => configModal.classList.add('hidden'));
+        saveApiKeyBtn.addEventListener('click', () => {
+            apiKey = apiKeyInput.value.trim();
+            localStorage.setItem('soulspace_gemini_key', apiKey);
+            configModal.classList.add('hidden');
+            alert('API Key 設定完成！');
+        });
+
+        function escapeHtml(str) {
+            return str.replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        }
+    </script>
+</body>
+</html>
