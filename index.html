@@ -224,6 +224,13 @@
     <!-- 主內容區 Main Container -->
     <main class="flex-1 flex flex-col h-full overflow-hidden bg-transparent">
 
+        <div class="px-4 md:px-6 py-2 flex items-center gap-2 shrink-0">
+            <button type="button" id="showChatBtn" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/90 text-morandi-700 border border-morandi-300 shadow-sm">陪伴</button>
+            <button type="button" id="showDiaryBtn" class="px-3 py-1.5 rounded-xl text-xs font-medium bg-white/50 text-morandi-600 border border-morandi-200">日記</button>
+        </div>
+
+        <div id="chatView" class="flex-1 flex flex-col min-h-0 overflow-hidden">
+
         <!-- 桌機頂部/手機資訊 Header -->
         <header class="py-3 px-4 md:px-6 genshin-card border-b border-morandi-200/60 flex items-center justify-between shrink-0 z-10">
             <div class="flex items-center gap-3">
@@ -280,6 +287,33 @@
                 <span>正在聆聽旅人的心聲... (再次點擊麥克風結束)</span>
             </div>
         </footer>
+        </div>
+
+        <section id="diaryView" class="hidden flex-1 flex-col min-h-0 overflow-hidden">
+            <div class="px-4 md:px-6 py-3 flex items-center justify-between gap-3 shrink-0">
+                <div>
+                    <h2 class="font-bold text-morandi-900 text-sm">每日日記</h2>
+                    <p id="diaryDateLabel" class="text-[11px] text-morandi-600"></p>
+                </div>
+                <button type="button" id="saveDiaryBtn" class="px-3 py-1.5 rounded-xl text-xs font-bold genshin-btn-primary text-white shrink-0">儲存</button>
+            </div>
+            <div class="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pb-2 smooth-scroll flex flex-col gap-3">
+                <textarea id="diaryInput" class="select-text w-full flex-1 min-h-[180px] p-3.5 rounded-2xl border border-morandi-200/90 focus:outline-none focus:border-morandi-400 focus:ring-2 focus:ring-morandi-200 text-sm leading-relaxed bg-white/90 text-morandi-900 placeholder-morandi-400 shadow-inner" placeholder="寫下今天，或按麥克風用說的..."></textarea>
+                <div id="diaryList" class="flex flex-wrap gap-1.5"></div>
+            </div>
+            <footer class="p-2.5 md:p-4 genshin-card border-t border-morandi-200/60 shrink-0 safe-pb">
+                <div class="max-w-4xl mx-auto flex items-center gap-2">
+                    <button type="button" id="diaryVoiceBtn" class="p-3 md:p-3.5 rounded-2xl border border-morandi-200 hover:border-morandi-400 text-morandi-600 hover:text-morandi-800 transition flex items-center justify-center bg-white/90 shrink-0 shadow-sm active:scale-95 min-w-[44px] min-h-[44px]" title="語音寫日記">
+                        <i class="fa-solid fa-microphone text-base"></i>
+                    </button>
+                    <p id="diarySaveStatus" class="text-[11px] text-morandi-600">存在這台裝置</p>
+                </div>
+                <div id="diaryRecordingStatus" class="hidden text-center text-xs text-morandi-700 font-bold mt-2 items-center justify-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-morandi-500 pulse-recording"></span>
+                    <span>正在把話語寫進日記...（再點一次麥克風結束）</span>
+                </div>
+            </footer>
+        </section>
     </main>
 
     <!-- API Key 設定 Modal -->
@@ -595,6 +629,183 @@
             return str.replace(/[&<>"']/g, function(m) {
                 return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
             });
+        }
+
+        // --- 每日日記（與聊天語音、對話歷史分開） ---
+        const DIARY_STORAGE_KEY = 'soulspace_diaries';
+        const chatView = document.getElementById('chatView');
+        const diaryView = document.getElementById('diaryView');
+        const showChatBtn = document.getElementById('showChatBtn');
+        const showDiaryBtn = document.getElementById('showDiaryBtn');
+        const diaryInput = document.getElementById('diaryInput');
+        const diaryDateLabel = document.getElementById('diaryDateLabel');
+        const diaryList = document.getElementById('diaryList');
+        const saveDiaryBtn = document.getElementById('saveDiaryBtn');
+        const diarySaveStatus = document.getElementById('diarySaveStatus');
+        const diaryVoiceBtn = document.getElementById('diaryVoiceBtn');
+        const diaryRecordingStatus = document.getElementById('diaryRecordingStatus');
+
+        let diaries = {};
+        try {
+            diaries = JSON.parse(localStorage.getItem(DIARY_STORAGE_KEY) || '{}') || {};
+        } catch (e) {
+            diaries = {};
+        }
+        let diaryActiveDate = '';
+        let diaryRecognition = null;
+        let diaryIsRecording = false;
+        let diarySessionBase = '';
+
+        function diaryDateKey(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return y + '-' + m + '-' + d;
+        }
+
+        function formatDiaryLabel(key) {
+            const parts = key.split('-');
+            if (parts.length !== 3) return key;
+            return parts[0] + '年' + Number(parts[1]) + '月' + Number(parts[2]) + '日';
+        }
+
+        function persistDiaries() {
+            localStorage.setItem(DIARY_STORAGE_KEY, JSON.stringify(diaries));
+        }
+
+        function saveActiveDiary() {
+            const text = diaryInput.value;
+            if (text.trim()) diaries[diaryActiveDate] = text;
+            else delete diaries[diaryActiveDate];
+            persistDiaries();
+            diarySaveStatus.textContent = '已儲存';
+            renderDiaryList();
+        }
+
+        function renderDiaryList() {
+            const keys = Object.keys(diaries).filter(function(key) {
+                return diaries[key] && String(diaries[key]).trim();
+            }).sort().reverse();
+            diaryList.innerHTML = '';
+            keys.forEach(function(key) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = formatDiaryLabel(key);
+                btn.className = 'text-[10px] px-2.5 py-1 rounded-lg border font-medium ' + (key === diaryActiveDate
+                    ? 'bg-morandi-200 text-morandi-800 border-morandi-300'
+                    : 'bg-white/80 text-morandi-700 border-morandi-200');
+                btn.addEventListener('click', function() {
+                    if (key === diaryActiveDate) return;
+                    saveActiveDiary();
+                    openDiaryDate(key);
+                });
+                diaryList.appendChild(btn);
+            });
+        }
+
+        function openDiaryDate(key) {
+            diaryActiveDate = key;
+            diaryDateLabel.textContent = formatDiaryLabel(key) + (key === diaryDateKey(new Date()) ? ' · 今天' : '');
+            diaryInput.value = diaries[key] || '';
+            diarySaveStatus.textContent = '存在這台裝置';
+            renderDiaryList();
+        }
+
+        function showChatView() {
+            diaryView.classList.add('hidden');
+            diaryView.classList.remove('flex');
+            chatView.classList.remove('hidden');
+            chatView.classList.add('flex');
+            showChatBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-white/90 text-morandi-700 border border-morandi-300 shadow-sm';
+            showDiaryBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-medium bg-white/50 text-morandi-600 border border-morandi-200';
+        }
+
+        function showDiaryView() {
+            chatView.classList.add('hidden');
+            chatView.classList.remove('flex');
+            diaryView.classList.remove('hidden');
+            diaryView.classList.add('flex');
+            showDiaryBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-white/90 text-morandi-700 border border-morandi-300 shadow-sm';
+            showChatBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-medium bg-white/50 text-morandi-600 border border-morandi-200';
+            if (!diaryActiveDate) openDiaryDate(diaryDateKey(new Date()));
+        }
+
+        showChatBtn.addEventListener('click', showChatView);
+        showDiaryBtn.addEventListener('click', showDiaryView);
+        saveDiaryBtn.addEventListener('click', saveActiveDiary);
+        diaryInput.addEventListener('input', function() {
+            diarySaveStatus.textContent = '尚未儲存';
+        });
+        openDiaryDate(diaryDateKey(new Date()));
+
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const DiarySpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            diaryRecognition = new DiarySpeechRecognition();
+            diaryRecognition.continuous = true;
+            diaryRecognition.interimResults = true;
+            diaryRecognition.lang = 'zh-TW';
+
+            diaryRecognition.onresult = function(event) {
+                let transcript = '';
+                for (let i = 0; i < event.results.length; i++) {
+                    transcript += event.results[i][0].transcript;
+                }
+                if (!transcript) {
+                    diaryInput.value = diarySessionBase;
+                    return;
+                }
+                diaryInput.value = diarySessionBase
+                    ? (diarySessionBase.endsWith('\n') ? diarySessionBase + transcript : diarySessionBase + '\n' + transcript)
+                    : transcript;
+            };
+
+            diaryRecognition.onend = function() {
+                if (diaryIsRecording) {
+                    diarySessionBase = diaryInput.value;
+                    try {
+                        diaryRecognition.start();
+                        return;
+                    } catch (e) {
+                        console.error(e);
+                    }
+                }
+                diaryRecordingStatus.classList.add('hidden');
+                diaryRecordingStatus.classList.remove('flex');
+                diaryVoiceBtn.classList.remove('bg-morandi-200', 'text-morandi-800', 'border-morandi-400');
+                saveActiveDiary();
+            };
+
+            diaryVoiceBtn.addEventListener('click', function() {
+                if (diaryIsRecording) {
+                    diaryIsRecording = false;
+                    diaryRecognition.stop();
+                    return;
+                }
+                diarySessionBase = diaryInput.value;
+                const startDiary = function() {
+                    diaryRecognition.start();
+                    diaryIsRecording = true;
+                    diaryRecordingStatus.classList.remove('hidden');
+                    diaryRecordingStatus.classList.add('flex');
+                    diaryVoiceBtn.classList.add('bg-morandi-200', 'text-morandi-800', 'border-morandi-400');
+                };
+                try {
+                    startDiary();
+                } catch (e) {
+                    if (recognition && isRecording) {
+                        try { recognition.stop(); } catch (stopErr) { console.error(stopErr); }
+                    }
+                    try {
+                        startDiary();
+                    } catch (err) {
+                        console.error(err);
+                        diaryIsRecording = false;
+                    }
+                }
+            });
+        } else {
+            diaryVoiceBtn.title = '您的瀏覽器不支援語音辨識';
+            diaryVoiceBtn.classList.add('opacity-40');
         }
     </script>
 </body>
