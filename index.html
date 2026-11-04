@@ -316,6 +316,7 @@
         let apiKey = localStorage.getItem('soulspace_gemini_key') || '';
         let isRecording = false;
         let recognition = null;
+        let conversationHistory = [];
 
         // --- DOM 元件 ---
         const roleSisterBtn = document.getElementById('roleSister');
@@ -438,12 +439,15 @@
 
             // 如果有 API Key，呼叫真實 Gemini API
             if (apiKey) {
+                conversationHistory.push({ role: 'user', text: message });
                 try {
-                    const aiReply = await callGeminiAPI(message);
+                    const aiReply = await callGeminiAPI();
+                    conversationHistory.push({ role: 'model', text: aiReply });
                     removeLoadingBubble(loadingId);
                     appendMessage('ai', aiReply);
                     updateEmotionAnalysis();
                 } catch (error) {
+                    conversationHistory.pop();
                     console.error('API Error:', error);
                     removeLoadingBubble(loadingId);
                     appendMessage('ai', `⚠️ 連線至命之座失敗：${error.message || '請檢查 API Key 是否正確'}`);
@@ -462,7 +466,7 @@
         });
 
         // --- 串接 Google Gemini API 核心邏輯 ---
-        async function callGeminiAPI(userPrompt) {
+        async function callGeminiAPI() {
             // 系統 prompt 定義
             const systemPrompts = {
                 sister: "你是一位充滿同理心、溫柔體貼的「暖心好姊妹」。你的語氣親切、溫暖、善於傾聽與安慰，最優先引導說出心事及看法，適當加入柔和的表情符號 (🌸✨)。請盡量提供情緒價值與陪伴感，回應長度適中（約中文10字）。",
@@ -475,12 +479,10 @@
                 system_instruction: {
                     parts: [{ text: systemPrompts[currentRole] }]
                 },
-                contents: [
-                    {
-                        role: "user",
-                        parts: [{ text: userPrompt }]
-                    }
-                ],
+                contents: conversationHistory.map(turn => ({
+                    role: turn.role,
+                    parts: [{ text: turn.text }]
+                })),
                 generationConfig: {
                     temperature: 0.7,
                     maxOutputTokens: 40
@@ -567,6 +569,7 @@
         }
 
         clearChatBtn.addEventListener('click', () => {
+            conversationHistory = [];
             chatHistory.innerHTML = `
                 <div class="flex gap-2.5 max-w-2xl">
                     <div class="w-8 h-8 md:w-9 md:h-9 rounded-2xl bg-gradient-to-br from-morandi-300 to-morandi-500 text-white flex items-center justify-center shrink-0 text-xs md:text-sm font-bold mt-1 shadow-sm border border-white">
