@@ -204,6 +204,11 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="px-4 py-2">
+                    <p class="text-[11px] font-bold text-morandi-500 tracking-wider mb-2">❖ 過去對話</p>
+                    <div id="conversationList" class="flex flex-col gap-1.5 max-h-40 overflow-y-auto smooth-scroll"></div>
+                </div>
             </div>
 
             <!-- 隱私與安全提示底部 -->
@@ -351,6 +356,8 @@
         let isRecording = false;
         let recognition = null;
         let conversationHistory = [];
+        let activeConversationId = '';
+        let conversationEpoch = 0;
 
         // --- DOM 元件 ---
         const roleSisterBtn = document.getElementById('roleSister');
@@ -470,17 +477,21 @@
             userInput.style.height = 'auto';
 
             const loadingId = appendLoadingBubble();
+            const epoch = conversationEpoch;
 
             // 如果有 API Key，呼叫真實 Gemini API
             if (apiKey) {
                 conversationHistory.push({ role: 'user', text: message });
                 try {
                     const aiReply = await callGeminiAPI();
+                    if (epoch !== conversationEpoch) return;
                     conversationHistory.push({ role: 'model', text: aiReply });
                     removeLoadingBubble(loadingId);
                     appendMessage('ai', aiReply);
                     updateEmotionAnalysis();
+                    persistActiveConversation();
                 } catch (error) {
+                    if (epoch !== conversationEpoch) return;
                     conversationHistory.pop();
                     console.error('API Error:', error);
                     removeLoadingBubble(loadingId);
@@ -488,13 +499,17 @@
                 }
             } else {
                 // 無 API Key 時走模擬展示模式
+                conversationHistory.push({ role: 'user', text: message });
                 setTimeout(() => {
+                    if (epoch !== conversationEpoch) return;
                     removeLoadingBubble(loadingId);
                     const mockReply = currentRole === 'sister' 
                         ? '（目前為展示模式，請點擊右上角⚙️填入 API Key 即可開啟真實 AI 回覆喔！）收到你的心聲囉，抱抱你～✨' 
                         : '（目前為展示模式，請點擊右上角⚙️填入 API Key 即可開啟真實 AI 回覆喔！）試著將問題拆解成一小步，慢慢來。';
+                    conversationHistory.push({ role: 'model', text: mockReply });
                     appendMessage('ai', mockReply);
                     updateEmotionAnalysis();
+                    persistActiveConversation();
                 }, 1000);
             }
         });
@@ -603,7 +618,7 @@
         }
 
         clearChatBtn.addEventListener('click', () => {
-            conversationHistory = [];
+            startNewConversation();
             chatHistory.innerHTML = `
                 <div class="flex gap-2.5 max-w-2xl">
                     <div class="w-8 h-8 md:w-9 md:h-9 rounded-2xl bg-gradient-to-br from-morandi-300 to-morandi-500 text-white flex items-center justify-center shrink-0 text-xs md:text-sm font-bold mt-1 shadow-sm border border-white">
@@ -807,6 +822,129 @@
             diaryVoiceBtn.title = '您的瀏覽器不支援語音辨識';
             diaryVoiceBtn.classList.add('opacity-40');
         }
+
+        const CONV_STORAGE_KEY = 'soulspace_conversations';
+        const conversationList = document.getElementById('conversationList');
+
+        function createConversationId() {
+            return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        }
+
+        function loadConvStore() {
+            try {
+                const data = JSON.parse(localStorage.getItem(CONV_STORAGE_KEY) || '{}');
+                if (!data || !Array.isArray(data.items)) return { activeId: '', items: [] };
+                return data;
+            } catch (e) {
+                return { activeId: '', items: [] };
+            }
+        }
+
+        function writeConvStore(store) {
+            localStorage.setItem(CONV_STORAGE_KEY, JSON.stringify(store));
+        }
+
+        function formatConvDate(iso) {
+            const date = new Date(iso);
+            if (Number.isNaN(date.getTime())) return '';
+            return date.getFullYear() + '/' + (date.getMonth() + 1) + '/' + date.getDate();
+        }
+
+        function renderConversationList() {
+            const store = loadConvStore();
+            const items = store.items.slice().sort(function(a, b) {
+                return String(b.updatedAt).localeCompare(String(a.updatedAt));
+            });
+            conversationList.innerHTML = '';
+            if (!items.length) {
+                const empty = document.createElement('p');
+                empty.className = 'text-[10px] text-morandi-500 px-1';
+                empty.textContent = '還沒有過去對話';
+                conversationList.appendChild(empty);
+                return;
+            }
+            items.forEach(function(item) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                const active = item.id === activeConversationId;
+                btn.className = 'text-left px-2.5 py-1.5 rounded-xl border ' + (active
+                    ? 'bg-morandi-200/80 border-morandi-300'
+                    : 'bg-white/80 border-morandi-200');
+                btn.innerHTML = '<span class="block text-[10px] text-morandi-500">' + escapeHtml(formatConvDate(item.updatedAt)) + '</span>'
+                    + '<span class="block text-[11px] text-morandi-800 truncate">' + escapeHtml(item.title || '對話') + '</span>';
+                btn.addEventListener('click', function() { openConversation(item.id); });
+                conversationList.appendChild(btn);
+            });
+        }
+
+        function persistActiveConversation() {
+            if (!activeConversationId || !conversationHistory.length) return;
+            const store = loadConvStore();
+            const firstUser = conversationHistory.find(function(m) { return m.role === 'user'; });
+            const title = firstUser ? firstUser.text.replace(/\s+/g, ' ').trim() : '對話';
+            const messages = conversationHistory.map(function(m) { return { role: m.role, text: m.text }; });
+            let session = store.items.find(function(s) { return s.id === activeConversationId; });
+            if (!session) {
+                session = { id: activeConversationId, updatedAt: new Date().toISOString(), title: title, messages: messages };
+                store.items.unshift(session);
+            } else {
+                session.updatedAt = new Date().toISOString();
+                session.title = title;
+                session.messages = messages;
+            }
+            store.activeId = activeConversationId;
+            writeConvStore(store);
+            renderConversationList();
+        }
+
+        function paintConversation(messages) {
+            chatHistory.innerHTML = '';
+            messages.forEach(function(m) {
+                appendMessage(m.role === 'user' ? 'user' : 'ai', m.text);
+            });
+        }
+
+        function startNewConversation() {
+            conversationEpoch++;
+            activeConversationId = createConversationId();
+            conversationHistory = [];
+            const store = loadConvStore();
+            store.activeId = activeConversationId;
+            writeConvStore(store);
+            renderConversationList();
+        }
+
+        function openConversation(id) {
+            const store = loadConvStore();
+            const session = store.items.find(function(s) { return s.id === id; });
+            if (!session) return;
+            conversationEpoch++;
+            activeConversationId = id;
+            store.activeId = id;
+            writeConvStore(store);
+            conversationHistory = (session.messages || []).map(function(m) { return { role: m.role, text: m.text }; });
+            paintConversation(conversationHistory);
+            renderConversationList();
+            showChatView();
+            closeDrawer();
+        }
+
+        function initConversations() {
+            const store = loadConvStore();
+            const session = store.items.find(function(s) { return s.id === store.activeId; });
+            if (session && session.messages && session.messages.length) {
+                activeConversationId = session.id;
+                conversationHistory = session.messages.map(function(m) { return { role: m.role, text: m.text }; });
+                paintConversation(conversationHistory);
+            } else {
+                activeConversationId = createConversationId();
+                store.activeId = activeConversationId;
+                writeConvStore(store);
+            }
+            renderConversationList();
+        }
+
+        initConversations();
     </script>
 </body>
 </html>
