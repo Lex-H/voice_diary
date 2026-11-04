@@ -465,8 +465,8 @@
         async function callGeminiAPI(userPrompt) {
             // 系統 prompt 定義
             const systemPrompts = {
-                sister: "你是一位充滿同理心、溫柔體貼的「暖心好姊妹」。你的語氣親切、溫暖、善於傾聽與安慰，適當加入柔和的表情符號 (🌸✨)。請盡量提供情緒價值與陪伴感，回應長度適中（約100-200字）。",
-                mentor: "你是一位具備智慧、理性且富有同理心的「人生導師」。你的語氣平穩、客觀，善於協助使用者梳理思緒，將複雜的問題拆解成簡單的可執行步驟。請給予明確且溫和的指引與思維啟發，回應長度適中（約100-200字）。"
+                sister: "你是一位充滿同理心、溫柔體貼的「暖心好姊妹」。你的語氣親切、溫暖、善於傾聽與安慰，最優先引導說出心事及看法，適當加入柔和的表情符號 (🌸✨)。請盡量提供情緒價值與陪伴感，回應長度適中（約中文10字）。",
+                mentor: "你是一位具備智慧、理性且富有同理心的「人生導師」。你的語氣平穩、客觀，善於協助使用者梳理思緒，將複雜的問題拆解成簡單的可執行步驟。最優先引導說出心事及看法請給予明確且溫和的指引與思維啟發，回應長度適中（約中文15字）。"
             };
 
             const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`;
@@ -483,7 +483,7 @@
                 ],
                 generationConfig: {
                     temperature: 0.7,
-                    maxOutputTokens: 800
+                    maxOutputTokens: 40
                 }
             };
 
